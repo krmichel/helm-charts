@@ -335,11 +335,14 @@ spec:
       {{- end }}
       {{- end }}
       {{- if not (contains "jenkins-home" (quote .Values.persistence.volumes)) }}
-      - name: jenkins-home
       {{- if .Values.persistence.enabled }}
+      {{- with .Values.persistence.existingClaim}}
+      - name: jenkins-home
         persistentVolumeClaim:
-          claimName: {{ .Values.persistence.existingClaim | default (include "jenkins.fullname" .) }}
+          claimName: {{ . }}
+      {{- end }}
       {{- else }}
+      - name: jenkins-home
         emptyDir: {}
       {{- end -}}
       {{- end }}
@@ -364,3 +367,38 @@ spec:
       imagePullSecrets:
       - name: {{ .Values.controller.imagePullSecretName }}
 {{- end -}}
+{{- if not (contains "jenkins-home" (quote .Values.persistence.volumes)) }}
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+  volumeClaimTemplates:
+    - kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        {{- if .Values.persistence.annotations }}
+        annotations:
+{{ toYaml .Values.persistence.annotations | indent 10 }}
+        {{- end }}
+        name: jenkins-home
+        namespace: {{ template "jenkins.namespace" . }}
+        labels:
+          "app.kubernetes.io/name": '{{ template "jenkins.name" .}}'
+          {{- if .Values.renderHelmLabels }}
+          "helm.sh/chart": "{{ .Chart.Name }}-{{ .Chart.Version }}"
+          {{- end }}
+          "app.kubernetes.io/managed-by": "{{ .Release.Service }}"
+          "app.kubernetes.io/instance": "{{ .Release.Name }}"
+          "app.kubernetes.io/component": "{{ .Values.controller.componentName }}"
+      spec:
+        accessModes:
+          - {{ .Values.persistence.accessMode | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size | quote }}
+        {{- if .Values.persistence.storageClass }}
+        {{- if (eq "-" .Values.persistence.storageClass) }}
+        storageClassName: ""
+        {{- else }}
+        storageClassName: "{{ .Values.persistence.storageClass }}"
+        {{- end }}
+        {{- end }}
+{{- end }}
+{{- end }}
